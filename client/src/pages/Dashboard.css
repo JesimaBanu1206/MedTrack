@@ -1,0 +1,595 @@
+:root {
+    --primary: #0d9488;
+    --primary-light: #e6fffa;
+    --primary-dark: #0f766e;
+    --secondary: #10b981;
+    --accent: #8b5cf6;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-700: #374151;
+    --gray-900: #111827;
+}
+
+.dashboard-container {
+    background: linear-gradient(135deg, #f0fdfa 0%, #e0f7f4 100%);
+    font-family: "Inter", sans-serif;
+    min-height: 100 screen;
+}
+
+/* SIDEBAR - 精确匹配设计图 */
+.sidebar {
+    width: 300px;
+    background-color: #0d9488; /* Primary Teal from image */
+    box-shadow: 4px 0 25px rgba(0, 0, 0, 0.1);
+    padding: 40px 25px;
+    transition: transform 0.3s ease;
+    position: fixed;
+    height: 100vh;
+    top: 0;
+    z-index: 1000;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    color: white;
+}
+
+.sidebar .brand {
+    font-weight: 800;
+    color: white;
+    font-size: 28px;
+    margin-bottom: 25px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    text-align: left;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sidebar .brand i {
+    font-size: 32px;
+}
+
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin-top: 10px;
+    flex-grow: 1;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+.sidebar ul::-webkit-scrollbar {
+    display: none;
+}
+
+.sidebar ul li {
+    margin-bottom: 8px;
+}
+
+.sidebar ul li a {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    color: white;
+    text-decoration: none;
+    padding: 14px 20px;
+    border-radius: 16px;
+    transition: all 0.2s ease;
+    font-weight: 600;
+    font-size: 17px;
+    opacity: 0.9;
+}
+
+.sidebar ul li a i {
+    font-size: 20px;
+    width: 25px;
+    text-align: center;
+}
+
+.sidebar ul li a:hover {
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 1;
+    transform: translateX(5px);
+}
+
+.sidebar ul li a.active {
+    background-color: rgba(255, 255, 255, 0.15); /* Glassmorphism highlight */
+    color: white;
+    opacity: 1;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar .logout-btn {
+    background-color: #e54d4d; /* Red as per image */
+    color: white;
+    border: none;
+    padding: 16px;
+    border-radius: 18px;
+    width: 100%;
+    font-weight: 800;
+    font-size: 19px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    margin-top: auto;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    box-shadow: 0 10px 20px rgba(229, 77, 77, 0.3);
+}
+
+.sidebar .logout-btn:hover {
+    background-color: #d32f2f;
+    transform: translateY(-3px);
+    box-shadow: 0 15px 25px rgba(229, 77, 77, 0.4);
+}
+
+.sidebar .logout-btn i {
+    font-size: 22px;
+}
+
+/* Sidebar Toggle States */
+.sidebar-closed {
+    transform: translateX(-100%);
+}
+
+.sidebar-open {
+    transform: translateX(0);
+}
+
+/* Ensure sidebar is visible on desktop by default */
+@media (min-width: 993px) {
+    .sidebar {
+        transform: translateX(0) !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    .sidebar-closed {
+        transform: translateX(0) !important;
+    }
+}
+
+.main-content {
+    margin-top: 0;
+    padding-top: 80px;
+    transition: margin-left 0.3s ease;
+}
+
+@media (min-width: 993px) {
+    .main-content {
+        margin-left: 300px !important;
+    }
+}
+
+/* Enhanced Navbar */
+.navbar-custom {
+    background-color: rgba(0, 137, 123, 0.95);
+    /* Matches Teal but with transparency */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(10px);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 900;
+    /* Below sidebar (1000) */
+    padding: 0.8rem 1.5rem;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+@media (min-width: 993px) {
+    .navbar-custom {
+        padding-left: 330px;
+        /* Offset for sidebar + some breathing room */
+    }
+}
+
+.navbar-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: white;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.user-avatar:hover {
+    border-color: white;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+}
+
+/* Card Hover Effects */
+.card-hover:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Health Stat Cards */
+.health-stat-card {
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.health-stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(15, 118, 110, 0.15);
+    border: 1px solid var(--primary);
+}
+
+/* Progress Cards */
+.progress-card {
+    transition: all 0.3s ease;
+    border: 1px solid var(--gray-200);
+    background: white;
+}
+
+.progress-card:hover {
+    background-color: var(--primary-light);
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Table Enhancements */
+.table-container {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.table-custom thead th {
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    font-weight: 600;
+    padding: 1rem;
+    border-bottom: 2px solid var(--primary);
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-completed {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+/* Welcome Banner */
+.welcome-banner {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+}
+
+.welcome-banner::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+    opacity: 0.5;
+}
+
+/* Section Headers */
+.section-header {
+    position: relative;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.section-header::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background: var(--primary);
+    border-radius: 2px;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.action-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.action-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.action-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+    font-size: 1.25rem;
+}
+
+.action-primary .action-icon {
+    background: rgba(13, 148, 136, 0.1);
+    color: var(--primary);
+}
+
+.action-secondary .action-icon {
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--accent);
+}
+
+.action-success .action-icon {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+
+.action-warning .action-icon {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning);
+}
+
+.svg-icon {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+/* Enhanced Health Events Cards */
+.health-event-card {
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+}
+
+.health-event-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+.health-event-card.vaccination {
+    border-left-color: #8b5cf6;
+}
+
+.health-event-card.checkup {
+    border-left-color: #f59e0b;
+}
+
+.health-event-card.dental {
+    border-left-color: #06b6d4;
+}
+
+.health-event-card.eye {
+    border-left-color: #10b981;
+}
+
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    /* Prevent blocking clicks when hidden */
+    transition: all 0.3s ease;
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    /* Enable clicks when visible */
+}
+
+.hamburger {
+    display: flex;
+    flex-direction: column;
+    width: 24px;
+    height: 18px;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.hamburger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background-color: white;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+.hamburger.active span:nth-child(1) {
+    transform: translateY(8px) rotate(45deg);
+}
+
+.hamburger.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.hamburger.active span:nth-child(3) {
+    transform: translateY(-8px) rotate(-45deg);
+}
+
+/* Patient ID Card Modal */
+.id-card-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.id-card-container {
+    background: white;
+    width: 450px;
+    max-width: 90%;
+    border-radius: 20px;
+    position: relative;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.id-card {
+    padding: 0;
+    background: white;
+}
+
+.id-card-header {
+    background: linear-gradient(135deg, #0d9488 0%, #00897b 100%);
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.id-card-header .hospital-name {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.id-card-body {
+    padding: 25px;
+    display: flex;
+    gap: 20px;
+}
+
+.id-card-photo {
+    width: 120px;
+    height: 120px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 3px solid #e2e8f0;
+}
+
+.id-card-info {
+    flex: 1;
+}
+
+.id-card-info h4 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a202c;
+}
+
+.id-card-info p {
+    margin: 4px 0;
+    font-size: 14px;
+    color: #4a5568;
+    font-weight: 500;
+}
+
+.id-card-info .label {
+    color: #a0aec0;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    display: block;
+    margin-top: 10px;
+}
+
+.id-card-footer {
+    background: #f8fafc;
+    padding: 15px 25px;
+    border-top: 1px dashed #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.qr-code {
+    width: 60px;
+    height: 60px;
+}
+
+.id-card-controls {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+}
+
+.control-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.control-btn:hover {
+    background: rgba(255, 255, 255, 0.4);
+    transform: scale(1.1);
+}
+
+.close-btn {
+    color: #ef4444 !important;
+    background: white !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.download-btn {
+    color: #0d9488 !important;
+    background: white !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}

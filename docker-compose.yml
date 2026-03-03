@@ -1,0 +1,109 @@
+# =====================================================
+# MEDTRACK - DOCKER COMPOSE CONFIGURATION
+# Healthcare Platform - Backend + Frontend
+# =====================================================
+
+version: '3.8'
+
+services:
+  # =====================================================
+  # BACKEND SERVICE
+  # =====================================================
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      target: production
+    container_name: medtrack-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:5173}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}
+      - ALLOWED_FILE_TYPES=${ALLOWED_FILE_TYPES:-application/pdf,image/jpeg,image/jpg,image/png}
+    networks:
+      - medtrack-network
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - backend-logs:/app/logs
+    labels:
+      - "com.medtrack.service=backend"
+      - "com.medtrack.environment=production"
+
+  # =====================================================
+  # FRONTEND SERVICE (Optional - if using Docker for frontend)
+  # =====================================================
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: medtrack-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+    networks:
+      - medtrack-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    labels:
+      - "com.medtrack.service=frontend"
+      - "com.medtrack.environment=production"
+
+# =====================================================
+# NETWORKS
+# =====================================================
+networks:
+  medtrack-network:
+    driver: bridge
+    name: medtrack-network
+
+# =====================================================
+# VOLUMES
+# =====================================================
+volumes:
+  backend-logs:
+    driver: local
+    name: medtrack-backend-logs
+
+# =====================================================
+# USAGE INSTRUCTIONS
+# =====================================================
+# Development:
+#   docker-compose up
+#
+# Production:
+#   docker-compose -f docker-compose.yml up -d
+#
+# View logs:
+#   docker-compose logs -f backend
+#
+# Stop services:
+#   docker-compose down
+#
+# Rebuild:
+#   docker-compose up --build
+#
+# Remove volumes:
+#   docker-compose down -v

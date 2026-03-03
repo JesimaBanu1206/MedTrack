@@ -1,0 +1,856 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+:root {
+    --bg-dark: #0b0e14;
+    --dark-700: #1a1f29;
+    --dark-800: #151921;
+    --dark-900: #0f1218;
+    --neon-blue: #3b82f6;
+    --neon-purple: #818cf8;
+    --neon-pink: #f472b6;
+    --neon-green: #34d399;
+    --neon-orange: #fb923c;
+    --neon-red: #f87171;
+    --neon-cyan: #22d3ee;
+    --glass-border: rgba(255, 255, 255, 0.05);
+    --sidebar-width: 280px;
+    --sidebar-collapsed-width: 80px;
+}
+
+body {
+    margin: 0;
+    font-family: 'Inter', 'Outfit', sans-serif;
+    color: #cbd5e1;
+    background-color: var(--bg-dark);
+}
+
+.font-outfit {
+    font-family: 'Outfit', sans-serif;
+}
+
+.font-inter {
+    font-family: 'Inter', sans-serif;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Premium Glassmorphism */
+.glass-card {
+    background: rgba(30, 41, 59, 0.3);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 20px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+    background: rgba(30, 41, 59, 0.4);
+    border-color: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════
+   MONGODB-STYLE SIDEBAR
+   Icon-only when collapsed, full labels on hover
+═══════════════════════════════════════════════════════ */
+
+.mongo-sidebar {
+    width: 64px;
+    min-width: 64px;
+    background-color: #0d121c;
+    border-right: 1px solid rgba(255, 255, 255, 0.03);
+    display: flex;
+    flex-direction: column;
+    z-index: 50;
+    overflow: hidden;
+    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+}
+
+.mongo-sidebar[data-expanded="true"] {
+    width: 240px;
+    min-width: 240px;
+}
+
+/* Logo row */
+.mongo-sidebar-logo {
+    height: 72px;
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 0 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.mongo-logo-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #2563eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+/* Nav container */
+.mongo-sidebar-nav {
+    flex: 1;
+    padding: 0.75rem 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Section group */
+.mongo-nav-section {
+    margin-bottom: 0.25rem;
+}
+
+/* Section label — hidden when collapsed */
+.mongo-section-label {
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #475569;
+    padding: 0.875rem 1.25rem 0.375rem;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 0.15s, max-height 0.2s;
+    pointer-events: none;
+}
+
+.mongo-sidebar[data-expanded="true"] .mongo-section-label {
+    opacity: 1;
+    max-height: 40px;
+}
+
+/* Nav item */
+.mongo-nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    height: 42px;
+    padding: 0 14px;
+    border-radius: 0;
+    color: #94a3b8;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    overflow: hidden;
+}
+
+.mongo-nav-item:hover {
+    background: rgba(255,255,255,0.04);
+    color: #e2e8f0;
+}
+
+.mongo-nav-item.active {
+    background: rgba(59,130,246,0.12);
+    color: #93c5fd;
+}
+
+.mongo-nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    background: #3b82f6;
+    border-radius: 0 4px 4px 0;
+}
+
+.mongo-nav-item.disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Icon wrapper — always visible */
+.mongo-nav-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* Badge on icon */
+.mongo-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 16px;
+    height: 16px;
+    background: #ef4444;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 900;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #0d121c;
+    animation: bounce 1s infinite;
+}
+
+/* Label — slides in when expanded */
+.mongo-nav-label {
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: opacity 0.18s, transform 0.18s;
+    pointer-events: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mongo-sidebar[data-expanded="true"] .mongo-nav-label {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+/* Footer */
+.mongo-sidebar-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 0.75rem 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.mongo-profile-item {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    flex: 1;
+    padding: 0.5rem 0.625rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.mongo-profile-item:hover,
+.mongo-profile-item.active {
+    background: rgba(255,255,255,0.04);
+}
+
+.mongo-profile-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #2563eb;
+    color: white;
+    font-weight: 900;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.mongo-profile-info {
+    min-width: 0;
+}
+
+.mongo-logout-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: #475569;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+    flex-shrink: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s, color 0.15s, background 0.15s;
+}
+
+.mongo-logout-btn:hover {
+    color: #f1f5f9;
+    background: rgba(255,255,255,0.06);
+}
+
+.mongo-sidebar[data-expanded="true"] .mongo-logout-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Driver Registration Card */
+.driver-card {
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.driver-card:hover {
+    box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+}
+
+.driver-avatar-wrap {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+}
+
+/* Header Styling */
+.main-header {
+    height: 80px;
+    background: rgba(13, 18, 28, 0.8);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+.district-selector {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 9999px;
+    padding: 0.625rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #f1f5f9;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.live-badge {
+    background: rgba(52, 211, 153, 0.1);
+    border: 1px solid rgba(52, 211, 153, 0.2);
+    border-radius: 9999px;
+    padding: 0.375rem 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #34d399;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 10px #34d399;
+}
+
+.status-dot.pulse {
+    animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.5);
+        opacity: 0.5;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Dashboard Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    padding: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+}
+
+.stat-icon-wrapper {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 0.25rem;
+}
+
+.stat-subtext {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #64748b;
+}
+
+/* Specific Cards matched from Image */
+.mtm-banner-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.4) 100%);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.mtm-banner-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.05), transparent 70%);
+}
+
+.monsoon-badge {
+    background: rgba(251, 146, 60, 0.1);
+    border: 1px solid rgba(251, 146, 60, 0.2);
+    color: #fb923c;
+    font-weight: 700;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+}
+
+/* Tables */
+.premium-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.premium-table th {
+    background: rgba(15, 23, 42, 0.4);
+    padding: 1rem 1.5rem;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #64748b;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.premium-table td {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    font-size: 0.875rem;
+}
+
+.premium-table tr:hover td {
+    background: rgba(255, 255, 255, 0.01);
+}
+
+/* Login Page Premium */
+.login-premium-bg {
+    min-height: 100vh;
+    background: radial-gradient(circle at 0% 0%, #1e1b4b 0%, #020617 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.login-glow-1 {
+    position: absolute;
+    top: -10%;
+    left: -10%;
+    width: 50%;
+    height: 50%;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+    filter: blur(100px);
+}
+
+.login-glow-2 {
+    position: absolute;
+    bottom: -10%;
+    right: -10%;
+    width: 50%;
+    height: 50%;
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+    filter: blur(100px);
+}
+
+.login-card-premium {
+    width: 100%;
+    max-width: 440px;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 32px;
+    padding: 3rem 2.5rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+
+/* Form Styling */
+.premium-input-wrapper {
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    padding: 0 1.25rem;
+    height: 56px;
+    transition: all 0.3s;
+}
+
+.premium-input-wrapper:focus-within {
+    border-color: #3b82f6;
+    background: rgba(15, 23, 42, 0.6);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.premium-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fff;
+    width: 100%;
+    margin-left: 0.75rem;
+    font-weight: 500;
+}
+
+.premium-button {
+    height: 56px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.3);
+}
+
+.premium-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 25px -5px rgba(59, 130, 246, 0.4);
+}
+
+.premium-button:active {
+    transform: translateY(0);
+}
+
+/* Helper Utilities */
+.text-xs {
+    font-size: 0.75rem;
+}
+
+.text-sm {
+    font-size: 0.875rem;
+}
+
+.font-bold {
+    font-weight: 700;
+}
+
+.font-black {
+    font-weight: 900;
+}
+
+.tracking-tight {
+    letter-spacing: -0.025em;
+}
+
+.tracking-tighter {
+    letter-spacing: -0.05em;
+}
+
+/* Portal Specific Styles */
+.portal-bg {
+    min-height: 100vh;
+    background: radial-gradient(circle at 100% 100%, #1e1b4b 0%, #020617 100%);
+    color: #f1f5f9;
+}
+
+.portal-nav {
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 1.25rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.portal-card {
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+
+.portal-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.portal-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.portal-stat-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 20px;
+    padding: 1.5rem;
+    transition: all 0.3s;
+}
+
+.portal-stat-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    transform: translateY(-4px);
+}
+
+/* Duty Status Specifics */
+.duty-status-available {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: #10b981;
+}
+
+.duty-status-on-duty {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+.duty-status-offline {
+    background: rgba(100, 116, 139, 0.1);
+    border: 1px solid rgba(100, 116, 139, 0.2);
+    color: #94a3b8;
+}
+
+/* Auth Pages Additional */
+.login-bg {
+    min-height: 100vh;
+    background: #020617;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-blur-1 {
+    position: absolute;
+    width: 50vw;
+    height: 50vw;
+    background: radial-gradient(circle, rgba(220, 38, 38, 0.08) 0%, transparent 70%);
+    top: -25vw;
+    left: -25vw;
+    filter: blur(100px);
+}
+
+.login-blur-2 {
+    position: absolute;
+    width: 60vw;
+    height: 60vw;
+    background: radial-gradient(circle, rgba(249, 115, 22, 0.05) 0%, transparent 70%);
+    bottom: -30vw;
+    right: -30vw;
+    filter: blur(120px);
+}
+
+.portal-icon-container {
+    width: 80px;
+    height: 80px;
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    color: white;
+    margin: 0 auto 1.5rem;
+    box-shadow: 0 20px 40px -10px rgba(220, 38, 38, 0.5);
+}
+
+.auth-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.auth-input-container i {
+    position: absolute;
+    left: 1.25rem;
+    color: #64748b;
+    font-size: 1.1rem;
+}
+
+.auth-input {
+    width: 100%;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    height: 56px;
+    padding: 0 1.5rem 0 3.5rem;
+    color: white;
+    font-weight: 500;
+    transition: all 0.3s;
+    outline: none;
+}
+
+.auth-input:focus {
+    border-color: #ef4444;
+    background: rgba(15, 23, 42, 0.6);
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+}
+
+.input-label {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #64748b;
+}
+
+.btn-primary-gradient {
+    height: 56px;
+    border-radius: 18px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary-gradient:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px -5px rgba(220, 38, 38, 0.4);
+}
+
+.footer-text {
+    font-size: 0.65rem;
+    letter-spacing: 0.4em;
+    color: #334155;
+    text-align: center;
+}
+
+/* Badge utility classes */
+.badge-green {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    color: #10b981;
+}
+
+.badge-red {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #f87171;
+}
+
+.badge-orange {
+    background: rgba(251, 146, 60, 0.1);
+    border: 1px solid rgba(251, 146, 60, 0.25);
+    color: #fb923c;
+}
+
+.badge-blue {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    color: #60a5fa;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+@media (max-width: 768px) {
+    .mongo-sidebar {
+        width: 240px !important;
+        min-width: 240px !important;
+        position: fixed;
+        height: 100vh;
+        z-index: 100;
+    }
+
+    .mongo-section-label,
+    .mongo-nav-label,
+    .mongo-logout-btn {
+        opacity: 1 !important;
+        max-height: 40px !important;
+        transform: translateX(0) !important;
+        pointer-events: auto !important;
+    }
+}
