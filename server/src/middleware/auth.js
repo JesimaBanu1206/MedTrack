@@ -24,7 +24,7 @@ export const verifyToken = async (req, res, next) => {
         // Fetch user + role name together
         const { data: user, error } = await supabase
             .from('users')
-            .select('id, email, is_verified, is_active, role_id, roles(name)')
+            .select('id, email, is_verified, is_active, role_id, hospital_id, roles(name)')
             .eq('id', decoded.userId || decoded.id)
             .single();
 
@@ -38,8 +38,11 @@ export const verifyToken = async (req, res, next) => {
 
         const role = user.roles?.name;
 
-        // Only non-super-admins need to be email-verified
-        if (role !== 'SUPER_ADMIN' && !user.is_verified) {
+        // Email verification is only required for patient/public registrations.
+        // Hospital staff (doctors, nurses, etc.) are created directly by hospital admins
+        // and must NOT be blocked by the is_verified flag.
+        const STAFF_ROLES = ['DOCTOR','NURSE','HOSPITAL_ADMIN','PHARMACIST','LAB_TECHNICIAN','RECEPTIONIST','OTHER_STAFF','SUPER_ADMIN'];
+        if (!STAFF_ROLES.includes(role) && !user.is_verified) {
             throw new ForbiddenError('User account is not verified');
         }
 
@@ -49,6 +52,7 @@ export const verifyToken = async (req, res, next) => {
             email: user.email,
             role: role,
             roleId: user.role_id,
+            hospitalId: user.hospital_id || null,
         };
 
         next();

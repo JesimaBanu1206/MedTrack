@@ -7,8 +7,15 @@ import {
     updateSuperAdminAccount,
     getAmbulanceUsageOverview,
     getEmergencyAlerts,
-    getAllDriversFleet
+    getAllDriversFleet,
+    getSuperAdminBedAvailability
 } from '../controllers/superAdminController.js';
+import {
+    createDistrictOfficer,
+    getDistrictOfficers,
+    updateDistrictOfficer,
+    resetDistrictOfficerPassword
+} from '../controllers/districtOfficerController.js';
 import { verifyToken, restrictTo } from '../middleware/auth.js';
 import {
     validate,
@@ -26,8 +33,6 @@ router.get('/stats', getDashboardStats);
 router.get('/resources', getResourceMonitor);
 
 // ── Emergency / Ambulance ──────────────────────────────────────────
-// IMPORTANT: specific static paths MUST come before parameterized routes
-// e.g. /emergency/drivers/fleet must be before /emergency/drivers/:driverId/access
 router.get('/emergency/alerts',          getEmergencyAlerts);
 router.get('/emergency/drivers',         getEmergencyDriverRequests);
 router.get('/emergency/drivers/fleet',   getAllDriversFleet);
@@ -35,5 +40,12 @@ router.patch('/emergency/drivers/:driverId/access', validate(emergencyDriverAppr
 
 router.patch('/account', validate(superAdminAccountUpdateSchema), updateSuperAdminAccount);
 router.get('/ambulance/use', getAmbulanceUsageOverview);
+router.get('/bed-availability', getSuperAdminBedAvailability);
+
+// ── District Officers ──────────────────────────────────────────────
+router.get('/district-officers',                           getDistrictOfficers);
+router.post('/district-officers',                          createDistrictOfficer);
+router.patch('/district-officers/:id',                     updateDistrictOfficer);
+router.post('/district-officers/:id/reset-password',       resetDistrictOfficerPassword);
 
 export default router;

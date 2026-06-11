@@ -1,8 +1,152 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import useAuthStore from '../store/authStore';
 import axiosInstance from '../api/axios';
 import './SuperAdminPage.css';
 import 'animate.css';
+
+// ─── Offline Detection Banner ────────────────────────────────────────────────
+function OfflineBanner() {
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    useEffect(() => {
+        const online  = () => setIsOnline(true);
+        const offline = () => setIsOnline(false);
+        window.addEventListener('online',  online);
+        window.addEventListener('offline', offline);
+        return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); };
+    }, []);
+    if (isOnline) return null;
+    return (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+            background: 'linear-gradient(90deg,#dc2626,#b91c1c)',
+            color: '#fff', textAlign: 'center', padding: '10px 16px',
+            fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10
+        }}>
+            <i className="fa-solid fa-wifi-slash" />
+            No Internet Connection — GPS updates paused. Please restore network access.
+        </div>
+    );
+}
+
+// ─── Mission Map (Leaflet via CDN, dynamic load) ─────────────────────────────
+function MissionMap({ driverLat, driverLng, spotLat, spotLng }) {
+    const mapRef = useRef(null);
+    const mapInstanceRef = useRef(null);
+    const routeLayerRef  = useRef(null);
+    const driverMarkerRef = useRef(null);
+
+    const initMap = useCallback(() => {
+        if (!mapRef.current || mapInstanceRef.current) return;
+        const L = window.L;
+        if (!L) return;
+
+        // Centre on spot if driver GPS not yet available, otherwise midpoint
+        const centerLat = driverLat ? (driverLat + spotLat) / 2 : spotLat;
+        const centerLng = driverLng ? (driverLng + spotLng) / 2 : spotLng;
+
+        const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: true });
+        mapInstanceRef.current = map;
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        const driverIcon = L.divIcon({
+            html: '<div style="background:#22c55e;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 8px #22c55e"></div>',
+            iconSize: [14, 14], iconAnchor: [7, 7], className: ''
+        });
+        const spotIcon = L.divIcon({
+            html: '<div style="background:#ef4444;width:18px;height:18px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 10px #ef4444"></div>',
+            iconSize: [18, 18], iconAnchor: [9, 9], className: ''
+        });
+
+        // Always show accident spot marker
+        L.marker([spotLat, spotLng], { icon: spotIcon })
+            .addTo(map).bindPopup('<b>\uD83D\uDD34 Accident Spot</b>').openPopup();
+
+        if (driverLat && driverLng) {
+            // Show driver + fetch route
+            driverMarkerRef.current = L.marker([driverLat, driverLng], { icon: driverIcon })
+                .addTo(map).bindPopup('<b>\uD83D\uDE91 Your Location</b>');
+
+            fetch(`https://router.project-osrm.org/route/v1/driving/${driverLng},${driverLat};${spotLng},${spotLat}?overview=full&geometries=geojson`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.routes?.[0]?.geometry) {
+                        if (routeLayerRef.current) map.removeLayer(routeLayerRef.current);
+                        routeLayerRef.current = L.geoJSON(data.routes[0].geometry, {
+                            style: { color: '#3b82f6', weight: 5, opacity: 0.85 }
+                        }).addTo(map);
+                        map.fitBounds(routeLayerRef.current.getBounds(), { padding: [40, 40] });
+                    } else {
+                        map.fitBounds([[driverLat, driverLng], [spotLat, spotLng]], { padding: [40, 40] });
+                    }
+                })
+                .catch(() => {
+                    map.fitBounds([[driverLat, driverLng], [spotLat, spotLng]], { padding: [40, 40] });
+                });
+        } else {
+            // No GPS fix yet — zoom to accident spot only
+            map.setView([spotLat, spotLng], 14);
+        }
+    }, [driverLat, driverLng, spotLat, spotLng]);
+
+    useEffect(() => {
+        // Dynamically load Leaflet CSS + JS from CDN
+        if (!document.getElementById('leaflet-css')) {
+            const link = document.createElement('link');
+            link.id = 'leaflet-css';
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(link);
+        }
+        if (!document.getElementById('leaflet-js')) {
+            const script = document.createElement('script');
+            script.id = 'leaflet-js';
+            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            script.onload = initMap;
+            document.head.appendChild(script);
+        } else if (window.L) {
+            initMap();
+        }
+        return () => {
+            if (mapInstanceRef.current) {
+                mapInstanceRef.current.remove();
+                mapInstanceRef.current = null;
+            }
+        };
+    }, [initMap]);
+
+    return (
+        <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(59,130,246,0.3)', marginTop: 16 }}>
+            <div style={{ background: 'rgba(15,23,42,0.8)', padding: '10px 16px',
+                display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid rgba(59,130,246,0.2)' }}>
+                <i className="fa-solid fa-route" style={{ color: '#3b82f6' }} />
+                <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>Route to Accident Spot</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#64748b' }}>
+                    {driverLat ? `Driver: ${driverLat.toFixed(4)}, ${driverLng.toFixed(4)}` : 'Locating...'}
+                </span>
+            </div>
+            <div ref={mapRef} style={{ height: 280, width: '100%' }} />
+            <div style={{ background: 'rgba(15,23,42,0.8)', padding: '8px 16px',
+                display: 'flex', gap: 20, fontSize: 11 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#22c55e' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                    Your Location
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#ef4444' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                    Accident Spot
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}>
+                    <span style={{ width: 24, height: 3, background: '#3b82f6', display: 'inline-block', borderRadius: 2 }} />
+                    Shortest Route
+                </span>
+            </div>
+        </div>
+    );
+}
 
 const EmergencyPortalPage = () => {
     const {
@@ -194,6 +338,7 @@ const EmergencyPortalPage = () => {
 
     return (
         <div className="portal-bg font-inter overflow-x-hidden min-h-screen">
+            <OfflineBanner />
             {/* Incoming Alert Modal */}
             {showIncomingAlert && activeAlert && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate__animated animate__fadeIn">
@@ -388,6 +533,17 @@ const EmergencyPortalPage = () => {
                                 );
                             })}
                         </div>
+
+                        {/* Mission Map — shown immediately on accept; driver marker appears once GPS is acquired */}
+                        {activeAlert && ['DISPATCHED','REACHED_SPOT','LEFT_SPOT','REACHED_HOSPITAL'].includes(activeAlert.status) &&
+                            activeAlert.latitude && (
+                            <MissionMap
+                                driverLat={lastLocation?.latitude ?? null}
+                                driverLng={lastLocation?.longitude ?? null}
+                                spotLat={Number(activeAlert.latitude)}
+                                spotLng={Number(activeAlert.longitude)}
+                            />
+                        )}
                     </div>
                 )}
 

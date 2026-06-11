@@ -762,11 +762,32 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 16px;
     height: 56px;
-    padding: 0 1.5rem 0 3.5rem;
+    /* right padding increased so eye-toggle button never overlaps text */
+    padding: 0 3rem 0 3.5rem;
     color: white;
     font-weight: 500;
     transition: all 0.3s;
     outline: none;
+}
+
+/* Eye toggle button — sits inside .auth-input-container (position:relative) */
+.auth-input-container .eye-toggle {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #64748b;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 4px 6px;
+    transition: color 0.2s;
+    z-index: 2;
+}
+.auth-input-container .eye-toggle:hover {
+    color: #e2e8f0;
 }
 
 .auth-input:focus {

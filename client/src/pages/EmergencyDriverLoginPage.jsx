@@ -66,7 +66,8 @@ const EmergencyDriverLoginPage = () => {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                                    className="eye-toggle"
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                                 >
                                     <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                                 </button>

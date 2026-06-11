@@ -744,6 +744,59 @@ export async function superAdminLogin(req, res, next) {
  * RESEND OTP
  * Generate and send new OTP
  */
+/**
+ * CHANGE PASSWORD
+ * Authenticated users can change their own password.
+ * Requires: currentPassword, newPassword
+ */
+export async function changePassword(req, res, next) {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user?.id;
+
+    try {
+        if (!currentPassword || !newPassword) {
+            throw new AppError('currentPassword and newPassword are required', 400);
+        }
+        if (newPassword.length < 6) {
+            throw new AppError('New password must be at least 6 characters', 400);
+        }
+
+        // Fetch current password hash
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('id, password_hash')
+            .eq('id', userId)
+            .single();
+
+        if (userError || !user) {
+            throw new AppError('User not found', 404);
+        }
+
+        // Verify current password
+        const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+        if (!isMatch) {
+            throw new AppError('Current password is incorrect', 401);
+        }
+
+        // Hash new password
+        const newHash = await bcrypt.hash(newPassword, 12);
+
+        // Update in DB
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({ password_hash: newHash, updated_at: new Date().toISOString() })
+            .eq('id', userId);
+
+        if (updateError) {
+            throw new AppError('Failed to update password', 500);
+        }
+
+        res.status(200).json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+        next(error);
+    }
+}
+
 export async function resendOTP(req, res, next) {
     const { phone } = req.body;
 

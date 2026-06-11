@@ -65,6 +65,7 @@ const useAuthStore = create((set, get) => ({
             if (accessToken) {
                 localStorage.setItem('token', accessToken);
                 localStorage.setItem('user', JSON.stringify(user));
+                // NOTE: Don't clear other portal tokens — portals are independent sessions
             }
             set({ user, isAuthenticated: true, isLoading: false, error: null });
             toast.success('Login successful!');
@@ -84,6 +85,12 @@ const useAuthStore = create((set, get) => ({
             const response = await axiosInstance.post('/auth/super-admin/login', credentials);
             const { accessToken, user } = response.data.data;
             if (accessToken) {
+                // Store in the dedicated super-admin key (used by axios for /super-admin routes)
+                // AND in the generic key (used by isAuthenticated / page guard).
+                // This way even if another role's login overwrites 'token' later,
+                // the super-admin API calls still use the correct JWT.
+                localStorage.setItem('superAdminToken', accessToken);
+                localStorage.setItem('superAdminUser', JSON.stringify(user));
                 localStorage.setItem('token', accessToken);
                 localStorage.setItem('user', JSON.stringify(user));
             }
@@ -276,11 +283,38 @@ const useAuthStore = create((set, get) => ({
     logout: () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('superAdminToken');
+        localStorage.removeItem('superAdminUser');
         set({ user: null, isAuthenticated: false, error: null });
         toast.success('Logged out successfully');
     },
 
     /* ── Fetch Patient Profile ────────────────────────────────────── */
+    /* ── Hospital Admin Login ────────────────────────────────────────────────────── */
+    hospitalAdminLogin: async (credentials) => {
+        set({ isLoading: true, error: null });
+        try {
+            const response = await axiosInstance.post('/hospital-admin/login', credentials);
+            const { accessToken, user } = response.data.data;
+            if (accessToken) {
+                // Store in hospital-admin-specific key so other portals don't interfere
+                localStorage.setItem('hospitalAdminToken', accessToken);
+                localStorage.setItem('hospitalAdminUser', JSON.stringify(user));
+                localStorage.setItem('token', accessToken);
+                localStorage.setItem('user', JSON.stringify(user));
+                // NOTE: Don't clear other portal tokens — portals are independent sessions
+            }
+            set({ user, isAuthenticated: true, isLoading: false, error: null });
+            toast.success('Welcome, Hospital Admin!');
+            return true;
+        } catch (error) {
+            const message = error.response?.data?.message || 'Login failed';
+            set({ error: message, isLoading: false, isAuthenticated: false });
+            toast.error(message);
+            return false;
+        }
+    },
+
     fetchProfile: async () => {
         try {
             const response = await axiosInstance.get('/patient/dashboard');

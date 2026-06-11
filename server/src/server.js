@@ -12,6 +12,15 @@ import labReportRoutes from './routes/labReportRoutes.js';
 import emergencyRoutes from './routes/emergencyRoutes.js';
 import emergencyPortalRoutes from './routes/emergencyPortalRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
+import hospitalRoutes from './routes/hospitalRoutes.js';
+import hospitalAdminRoutes from './routes/hospitalAdminRoutes.js';
+import aiDocumentRoutes from './routes/aiDocumentRoutes.js';
+import passwordResetRoutes from './routes/passwordResetRoutes.js';
+import doctorRoutes from './routes/doctorRoutes.js';
+import nurseRoutes from './routes/nurseRoutes.js';
+import receptionistRoutes from './routes/receptionistRoutes.js';
+import appointmentRoutes from './routes/appointmentRoutes.js';
+import districtRoutes from './routes/districtRoutes.js';
 
 const app = express();
 
@@ -100,6 +109,15 @@ app.use('/api/patient/lab-reports', labReportRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/emergency-portal', emergencyPortalRoutes);
 app.use('/api/super-admin', superAdminRoutes);
+app.use('/api/super-admin/hospitals', hospitalRoutes);          // GH & PHC Centres
+app.use('/api/hospital-admin', hospitalAdminRoutes);             // Hospital Admin panel
+app.use('/api/ai', aiDocumentRoutes);                            // AI Document Analyzer
+app.use('/api/auth', passwordResetRoutes);                       // Password reset (auth namespace)
+app.use('/api/doctor', doctorRoutes);                            // Doctor + Staff portal
+app.use('/api/nurse', nurseRoutes);                              // Nurse dashboard
+app.use('/api/receptionist', receptionistRoutes);                // Receptionist portal ← NEW
+app.use('/api/appointments', appointmentRoutes);                 // Public appointment booking ← NEW
+app.use('/api/district', districtRoutes);                        // District Health Officer ← NEW
 
 // =====================================================
 // 404 HANDLER
@@ -145,7 +163,6 @@ process.on('SIGINT', () => {
 // =====================================================
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    // In production, you might want to log this to a monitoring service
 });
 
 export default app;

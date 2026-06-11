@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Line, Doughnut } from 'react-chartjs-2';
+import GHPHCPage from './GHPHCPage';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -17,6 +18,7 @@ import { toast } from 'react-hot-toast';
 import useAuthStore from '../store/authStore';
 import './SuperAdminPage.css';
 import 'animate.css';
+import DistrictOfficerManager from "./DistrictOfficerManager";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, ArcElement, Filler);
 
@@ -38,17 +40,18 @@ const MongoSidebar = ({ currentPage, setCurrentPage, authUser, pendingCount, han
     const navItems = [
         { section: 'State Overview', items: [
             { id: 'DASHBOARD', icon: 'fa-gauge-high', label: 'Dashboard' },
-            { id: 'BED',       icon: 'fa-bed-pulse',   label: 'Bed Availability', disabled: true },
+            { id: 'BED',       icon: 'fa-bed-pulse',   label: 'Bed Availability' },
         ]},
         { section: 'Govt Schemes', items: [
             { id: 'CMCHIS',  icon: 'fa-hand-holding-medical', label: 'CMCHIS Claims', disabled: true },
             { id: 'MTM',     icon: 'fa-user-nurse',           label: 'Makkal Thedi Maruthuvam', disabled: true },
         ]},
         { section: 'Network Partners', items: [
-            { id: 'GH',        icon: 'fa-hospital',     label: 'GH & PHC Centers', disabled: true },
+            { id: 'GH',        icon: 'fa-hospital',     label: 'GH & PHC Centers' },
             { id: 'AMBULANCE', icon: 'fa-truck-medical', label: '108 Ambulance', badge: pendingCount > 0 ? pendingCount : null },
         ]},
         { section: 'Administration', items: [
+            { id: 'DISTRICT_OFFICERS', icon: 'fa-user-shield', label: 'District Officers' },
             { id: 'SETTINGS', icon: 'fa-sliders', label: 'System Settings' },
         ]},
     ];
@@ -355,8 +358,51 @@ const FleetCard = ({ item }) => {
 };
 
 /* ─────────────────────────────────────────────────────
+   OFFLINE BANNER
+───────────────────────────────────────────────────── */
+const OfflineBanner = () => {
+    const [online, setOnline] = React.useState(
+        typeof navigator !== 'undefined' ? navigator.onLine : true
+    );
+    React.useEffect(() => {
+        const on  = () => setOnline(true);
+        const off = () => setOnline(false);
+        window.addEventListener('online',  on);
+        window.addEventListener('offline', off);
+        return () => {
+            window.removeEventListener('online',  on);
+            window.removeEventListener('offline', off);
+        };
+    }, []);
+    if (online) return null;
+    return (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999,
+            background: 'linear-gradient(90deg,#dc2626,#b91c1c)',
+            color: '#fff', textAlign: 'center', padding: '10px 16px',
+            fontSize: 13, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10
+        }}>
+            <i className="fa-solid fa-wifi-slash" />
+            &nbsp;No Internet Connection — Data updates paused. Restore network to resume sync.
+        </div>
+    );
+};
+
+/* ─────────────────────────────────────────────────────
    MAIN COMPONENT
 ───────────────────────────────────────────────────── */
+// ─── Haversine straight-line distance (km) ───────────────────────────────────
+function haversineKm(lat1, lng1, lat2, lng2) {
+    if (!lat1 || !lng1 || !lat2 || !lng2) return null;
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2);
+}
+
 const SuperAdminPage = () => {
     const { isAuthenticated, user: authUser, superAdminLogin, logout, setUser, isLoading: authLoading, error: authError, setError: setAuthError } = useAuthStore();
     const [username, setUsername] = useState('');
@@ -385,6 +431,34 @@ const SuperAdminPage = () => {
     const [expandedAlert, setExpandedAlert] = useState(null);
     const [driverSearch, setDriverSearch] = useState('');
     const [driverStatusFilter, setDriverStatusFilter] = useState('ALL');
+
+    // GH & PHC Centres state
+    const [ghTab, setGhTab]                   = useState('LIST');  // LIST | CREATE
+    const [hospitals, setHospitals]           = useState([]);
+    const [hospitalsLoading, setHospitalsLoading] = useState(false);
+    const [hospitalAnalytics, setHospitalAnalytics] = useState(null);
+    const [ghSearch, setGhSearch]             = useState('');
+    const [ghDistrict, setGhDistrict]         = useState('all');
+    const [ghType, setGhType]                 = useState('all');
+    const [ghStatus, setGhStatus]             = useState('all');
+    const [ghPage, setGhPage]                 = useState(1);
+    const [ghPagination, setGhPagination]     = useState(null);
+    const [editHospital, setEditHospital]     = useState(null);   // hospital obj being edited
+    const [viewHospital, setViewHospital]     = useState(null);   // hospital obj in detail modal
+    const [createForm, setCreateForm]         = useState({
+        hospitalName: '', hospitalCode: '', type: 'GH', address: '',
+        district: '', contactEmail: '', contactPhone: '', status: 'ACTIVE'
+    });
+    const [createLoading, setCreateLoading]   = useState(false);
+    const [editLoading, setEditLoading]       = useState(false);
+
+    // BED Availability state
+    const [bedData, setBedData]                       = useState([]);
+    const [bedLoading, setBedLoading]                 = useState(false);
+    const [bedSearch, setBedSearch]                   = useState('');
+    const [bedDistrictFilter, setBedDistrictFilter]   = useState('all');
+    const [selectedBedHospital, setSelectedBedHospital] = useState(null); // popup
+    const [bedError, setBedError]                     = useState(null);
 
     // Account settings
     const [adminEmail, setAdminEmail] = useState('');
@@ -459,6 +533,33 @@ const SuperAdminPage = () => {
         }
     }, [isAuthenticated, authUser]);
 
+    // ── GH & PHC ──────────────────────────────────────────────────────────────
+    const fetchHospitals = useCallback(async (search = ghSearch, district = ghDistrict, type = ghType, status = ghStatus, page = ghPage) => {
+        if (!isAuthenticated || authUser?.role !== 'SUPER_ADMIN') return;
+        setHospitalsLoading(true);
+        try {
+            const params = new URLSearchParams({ search, district, type, status, page, limit: 20 });
+            const res = await axiosInstance.get(`/super-admin/hospitals?${params}`);
+            if (res.data?.success) {
+                setHospitals(res.data.data || []);
+                setGhPagination(res.data.pagination);
+            }
+        } catch (err) {
+            console.error('Hospitals fetch error:', err);
+            toast.error('Failed to load hospitals');
+        } finally {
+            setHospitalsLoading(false);
+        }
+    }, [isAuthenticated, authUser, ghSearch, ghDistrict, ghType, ghStatus, ghPage]);
+
+    const fetchHospitalAnalytics = useCallback(async () => {
+        if (!isAuthenticated || authUser?.role !== 'SUPER_ADMIN') return;
+        try {
+            const res = await axiosInstance.get('/super-admin/hospitals/analytics');
+            if (res.data?.success) setHospitalAnalytics(res.data.data);
+        } catch (err) { console.error('Analytics fetch error:', err); }
+    }, [isAuthenticated, authUser]);
+
     const fetchFleetDrivers = useCallback(async () => {
         if (!isAuthenticated || authUser?.role !== 'SUPER_ADMIN') return;
         setFleetLoading(true);
@@ -498,9 +599,136 @@ const SuperAdminPage = () => {
                 fetchEmergencyAlerts();
                 fetchFleetDrivers();
             }
-        }, 30000);
+        }, 10000);
         return () => clearInterval(interval);
     }, [isAuthenticated, authUser, autoSync, selectedDistrict, fetchDashboardData, fetchEmergencyDrivers, fetchAmbulanceUseData, fetchEmergencyAlerts, fetchFleetDrivers]);
+
+    // ── BED AVAILABILITY ──────────────────────────────────────────────────────
+    const fetchBedAvailability = useCallback(async (search = bedSearch, district = bedDistrictFilter) => {
+        if (!isAuthenticated || authUser?.role !== 'SUPER_ADMIN') return;
+        setBedLoading(true);
+        setBedError(null);
+        try {
+            const params = new URLSearchParams({ search, district });
+            const res = await axiosInstance.get(`/super-admin/bed-availability?${params}`);
+            if (res.data?.success) setBedData(res.data.data || []);
+        } catch (err) {
+            console.error('Bed availability fetch error:', err);
+            const isOffline = !navigator.onLine;
+            const status = err?.response?.status;
+            if (isOffline) {
+                setBedError('No internet connection. Please check your network and retry.');
+            } else if (status >= 500) {
+                setBedError('Server error loading bed data. Retrying in 3 seconds…');
+                setTimeout(() => fetchBedAvailability(search, district), 3000);
+            } else {
+                setBedError('Failed to load bed availability. Please refresh.');
+            }
+        } finally {
+            setBedLoading(false);
+        }
+    }, [isAuthenticated, authUser, bedSearch, bedDistrictFilter]);
+
+    // Fetch when navigating to BED page
+    useEffect(() => {
+        if (currentPage === 'BED' && isAuthenticated && authUser?.role === 'SUPER_ADMIN') {
+            fetchBedAvailability();
+        }
+    }, [currentPage]);
+
+    // Debounced live-search — fires 350 ms after typing stops
+    const bedSearchDebounceRef = useRef(null);
+    useEffect(() => {
+        if (currentPage !== 'BED') return;
+        clearTimeout(bedSearchDebounceRef.current);
+        bedSearchDebounceRef.current = setTimeout(() => {
+            fetchBedAvailability(bedSearch, bedDistrictFilter);
+        }, 350);
+        return () => clearTimeout(bedSearchDebounceRef.current);
+    }, [bedSearch]);
+
+    // Fetch hospitals when navigating to GH page
+    useEffect(() => {
+        if (currentPage === 'GH' && isAuthenticated && authUser?.role === 'SUPER_ADMIN') {
+            fetchHospitals();
+            fetchHospitalAnalytics();
+        }
+    }, [currentPage]);
+
+    // Re-fetch when GH filters change
+    useEffect(() => {
+        if (currentPage === 'GH') fetchHospitals();
+    }, [ghSearch, ghDistrict, ghType, ghStatus, ghPage]);
+
+    const handleCreateHospital = async (e) => {
+        e.preventDefault();
+        setCreateLoading(true);
+        try {
+            const res = await axiosInstance.post('/super-admin/hospitals', createForm);
+            if (res.data?.success) {
+                toast.success('Hospital created! Admin credentials sent via email.');
+                setCreateForm({ hospitalName: '', hospitalCode: '', type: 'GH', address: '', district: '', contactEmail: '', contactPhone: '', status: 'ACTIVE' });
+                setGhTab('LIST');
+                fetchHospitals();
+                fetchHospitalAnalytics();
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to create hospital');
+        } finally {
+            setCreateLoading(false);
+        }
+    };
+
+    const handleUpdateHospital = async (id, payload) => {
+        setEditLoading(true);
+        try {
+            const res = await axiosInstance.put(`/super-admin/hospitals/${id}`, payload);
+            if (res.data?.success) {
+                toast.success('Hospital updated');
+                setEditHospital(null);
+                fetchHospitals();
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update hospital');
+        } finally {
+            setEditLoading(false);
+        }
+    };
+
+    const handleToggleStatus = async (id) => {
+        try {
+            const res = await axiosInstance.patch(`/super-admin/hospitals/${id}/toggle-status`);
+            if (res.data?.success) {
+                toast.success(res.data.message);
+                fetchHospitals();
+                fetchHospitalAnalytics();
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to toggle status');
+        }
+    };
+
+    const handleDeleteHospital = async (id) => {
+        if (!window.confirm('Soft-delete this hospital? All staff will be deactivated.')) return;
+        try {
+            const res = await axiosInstance.delete(`/super-admin/hospitals/${id}`);
+            if (res.data?.success) {
+                toast.success('Hospital removed');
+                fetchHospitals();
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Delete failed');
+        }
+    };
+
+    const handleExportCSV = async () => {
+        try {
+            const res = await axiosInstance.get('/super-admin/hospitals/export/csv', { responseType: 'blob' });
+            const url = window.URL.createObjectURL(res.data);
+            const a = document.createElement('a'); a.href = url; a.download = 'hospitals.csv'; a.click();
+            window.URL.revokeObjectURL(url);
+        } catch { toast.error('Export failed'); }
+    };
 
     const handleEmergencyAccess = async (driverId, approvalStatus) => {
         const unit = unitInputs[driverId] || '';
@@ -596,6 +824,7 @@ const SuperAdminPage = () => {
     if (!isAuthenticated || authUser?.role !== 'SUPER_ADMIN') {
         return (
             <div className="login-premium-bg font-inter">
+                <OfflineBanner />
                 <div className="login-glow-1"></div>
                 <div className="login-glow-2"></div>
                 <div className="login-card-premium animate__animated animate__fadeIn">
@@ -651,7 +880,7 @@ const SuperAdminPage = () => {
     /* ── Authenticated Layout ── */
     return (
         <div className="flex h-screen overflow-hidden bg-[#070b14] text-[#cbd5e1] font-inter">
-
+            <OfflineBanner />
             <MongoSidebar
                 currentPage={currentPage}
                 setCurrentPage={setCurrentPage}
@@ -704,10 +933,10 @@ const SuperAdminPage = () => {
                             </div>
 
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                                <StatCard icon="fa-truck-medical" label="Active 108 Units" value="1,402" sub="98% Operational" color="blue" />
-                                <StatCard icon="fa-indian-rupee-sign" label="CMCHIS Claims" value="₹4.2 Cr" sub="Pending: 128" color="purple" />
+                                <StatCard icon="fa-user-injured" label="Total Patients" value={stats?.patients?.total ?? '—'} sub="Across connected hospitals" color="blue" />
+                                <StatCard icon="fa-user-doctor" label="Total Doctors" value={stats?.staff?.doctors ?? '—'} sub={`Nurses: ${stats?.staff?.nurses ?? 0}`} color="purple" />
                                 <StatCard icon="fa-bed-pulse" label="Govt ICU Beds" value={stats?.hospitals?.icu_beds ?? '—'} sub="Low Availability" color="pink" />
-                                <StatCard icon="fa-virus-covid-slash" label="Dengue Hotspots" value="5 Zones" sub="Madurai / Tirunelveli" color="red" alert />
+                                <StatCard icon="fa-users" label="Total Staff" value={stats?.staff?.total ?? '—'} sub={`Hospitals: ${stats?.hospitals?.total_hospitals ?? 0}`} color="red" />
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
@@ -995,21 +1224,71 @@ const SuperAdminPage = () => {
                                                                         )}
                                                                     </div>
 
-                                                                    {/* Driver live GPS */}
-                                                                    {alert.driver?.live_lat && (
-                                                                        <div className="bg-slate-900/60 rounded-xl border border-emerald-500/20 p-4">
-                                                                            <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-3">Driver Live Location</p>
-                                                                            <div className="flex items-center gap-3 font-mono text-xs mb-2">
-                                                                                <i className="fa-solid fa-location-dot text-emerald-400"></i>
-                                                                                <span className="text-emerald-400">{Number(alert.driver.live_lat).toFixed(5)}, {Number(alert.driver.live_lng).toFixed(5)}</span>
+                                                                    {/* Driver live GPS + Route Map */}
+                                                                    {alert.driver?.live_lat && alert.latitude && (
+                                                                        <div className="space-y-3">
+                                                                            {/* Distance badge */}
+                                                                            {(() => {
+                                                                                const dist = haversineKm(
+                                                                                    parseFloat(alert.driver.live_lat), parseFloat(alert.driver.live_lng),
+                                                                                    parseFloat(alert.latitude), parseFloat(alert.longitude)
+                                                                                );
+                                                                                return dist ? (
+                                                                                    <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-3">
+                                                                                        <i className="fa-solid fa-route text-orange-400 text-lg"></i>
+                                                                                        <div>
+                                                                                            <p className="text-[9px] text-orange-400 font-black uppercase tracking-widest">Distance to Spot</p>
+                                                                                            <p className="text-white font-black text-lg">{dist} <span className="text-orange-400 text-sm font-bold">km</span></p>
+                                                                                            <p className="text-[9px] text-slate-500">Straight-line · Est. {Math.ceil(dist / 40 * 60)} min at 40 km/h</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : null;
+                                                                            })()}
+
+                                                                            {/* Embedded route map */}
+                                                                            <div className="rounded-xl overflow-hidden border border-white/10">
+                                                                                <div className="bg-slate-900/80 px-3 py-2 flex items-center justify-between">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                                                                        <span className="text-[10px] text-slate-400 font-bold">Ambulance</span>
+                                                                                        <div className="w-12 h-px bg-slate-600"></div>
+                                                                                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                                                                        <span className="text-[10px] text-slate-400 font-bold">Accident Spot</span>
+                                                                                    </div>
+                                                                                    <a
+                                                                                        href={`https://www.google.com/maps/dir/${alert.driver.live_lat},${alert.driver.live_lng}/${alert.latitude},${alert.longitude}`}
+                                                                                        target="_blank" rel="noreferrer"
+                                                                                        className="text-[10px] text-blue-400 font-bold hover:underline flex items-center gap-1"
+                                                                                    >
+                                                                                        <i className="fa-solid fa-arrow-up-right-from-square"></i> Full Route
+                                                                                    </a>
+                                                                                </div>
+                                                                                <iframe
+                                                                                    title="route-map"
+                                                                                    src={`https://maps.google.com/maps?saddr=${alert.driver.live_lat},${alert.driver.live_lng}&daddr=${alert.latitude},${alert.longitude}&output=embed&t=k`}
+                                                                                    width="100%"
+                                                                                    height="220"
+                                                                                    style={{ border: 0, display: 'block' }}
+                                                                                    loading="lazy"
+                                                                                    allowFullScreen
+                                                                                />
                                                                             </div>
-                                                                            <p className="text-[9px] text-slate-600">
-                                                                                Updated {alert.driver.last_location_at ? new Date(alert.driver.last_location_at).toLocaleTimeString() : 'N/A'}
-                                                                            </p>
-                                                                            <a href={`https://maps.google.com/?q=${alert.driver.live_lat},${alert.driver.live_lng}`} target="_blank" rel="noreferrer"
-                                                                                className="flex items-center gap-2 mt-2 text-xs font-bold text-emerald-400 hover:text-emerald-300">
-                                                                                <i className="fa-solid fa-map-pin"></i> Track Driver
-                                                                            </a>
+
+                                                                            {/* Driver GPS info */}
+                                                                            <div className="bg-slate-900/60 rounded-xl border border-emerald-500/20 p-3">
+                                                                                <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-2">Driver Position</p>
+                                                                                <div className="flex items-center gap-3 font-mono text-xs mb-1">
+                                                                                    <i className="fa-solid fa-location-dot text-emerald-400"></i>
+                                                                                    <span className="text-emerald-400">{Number(alert.driver.live_lat).toFixed(5)}, {Number(alert.driver.live_lng).toFixed(5)}</span>
+                                                                                </div>
+                                                                                <p className="text-[9px] text-slate-600">Updated {alert.driver.last_location_at ? new Date(alert.driver.last_location_at).toLocaleTimeString() : 'N/A'}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {alert.driver && !alert.driver.live_lat && (
+                                                                        <div className="bg-slate-900/60 rounded-xl border border-slate-700 p-3 text-center">
+                                                                            <i className="fa-solid fa-satellite-dish text-slate-600 text-xl mb-1"></i>
+                                                                            <p className="text-[10px] text-slate-500">Driver GPS not available yet</p>
                                                                         </div>
                                                                     )}
 
@@ -1212,6 +1491,544 @@ const SuperAdminPage = () => {
                         </div>
                         );
                     })()}
+
+                    {/* ── BED AVAILABILITY ── */}
+                    {currentPage === 'BED' && (
+                        <div className="animate__animated animate__fadeIn">
+                            {/* Header */}
+                            <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
+                                <div>
+                                    <h2 className="text-3xl font-extrabold text-white tracking-tight mb-1">Bed Availability</h2>
+                                    <p className="text-slate-400 text-sm">Real-time ward-wise bed status across all connected hospitals</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    {bedData.length > 0 && (
+                                        <button
+                                            onClick={() => {
+                                                const rows = [['Code','Hospital','Type','District','Wards','Total Beds','Available','Occupied','Occupancy%']];
+                                                bedData.forEach(h => rows.push([
+                                                    h.hospital_code, h.name, h.type, h.district,
+                                                    h.totalWards, h.totalBeds, h.availableBeds, h.occupiedBeds, h.occupancyPct
+                                                ]));
+                                                const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+                                                const a = document.createElement('a');
+                                                a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+                                                a.download = `bed-availability-${new Date().toISOString().slice(0,10)}.csv`;
+                                                a.click();
+                                            }}
+                                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-black uppercase hover:bg-emerald-600 hover:text-white transition-all"
+                                        >
+                                            <i className="fa-solid fa-file-csv" />&nbsp;Export CSV
+                                        </button>
+                                    )}
+                                    <button onClick={() => fetchBedAvailability(bedSearch, bedDistrictFilter)}
+                                        className="text-blue-400 text-xs font-black uppercase tracking-widest hover:underline flex items-center gap-1">
+                                        <i className={`fa-solid fa-rotate-right ${bedLoading ? 'animate-spin' : ''}`} /> Refresh
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Search & Filter bar */}
+                            <div className="glass-card p-4 rounded-2xl mb-5 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                                <div className="flex-1 flex items-center gap-2 bg-slate-900 border border-white/5 rounded-xl px-3 py-2">
+                                    <i className="fa-solid fa-magnifying-glass text-slate-500 text-xs" />
+                                    <input
+                                        type="text"
+                                        value={bedSearch}
+                                        onChange={e => setBedSearch(e.target.value)}
+                                                placeholder="Search by hospital code, name or district..."
+                                        className="bg-transparent outline-none text-sm text-white flex-1 placeholder:text-slate-600"
+                                    />
+                                    {bedSearch && (
+                                        <button onClick={() => { setBedSearch(''); fetchBedAvailability('', bedDistrictFilter); }}
+                                            className="text-slate-500 hover:text-white text-xs">×</button>
+                                    )}
+                                </div>
+                                <select value={bedDistrictFilter} onChange={e => { setBedDistrictFilter(e.target.value); fetchBedAvailability(bedSearch, e.target.value); }}
+                                    className="bg-slate-900 border border-white/5 text-slate-300 rounded-xl px-3 py-2 text-sm outline-none">
+                                    <option value="all">All Districts</option>
+                                    {['Chennai','Coimbatore','Madurai','Tiruchirappalli','Salem','Tirunelveli','Vellore','Erode','Tirupur','Thanjavur'].map(d => (
+                                        <option key={d} value={d}>{d}</option>
+                                    ))}
+                                </select>
+                                <button onClick={() => fetchBedAvailability(bedSearch, bedDistrictFilter)}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-colors whitespace-nowrap">
+                                    <i className="fa-solid fa-search mr-2" />Search
+                                </button>
+                            </div>
+
+                            {/* Error / offline banner */}
+                            {bedError && (
+                                <div className="flex items-center gap-3 p-4 mb-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 animate__animated animate__fadeIn">
+                                    <i className="fa-solid fa-triangle-exclamation flex-shrink-0 text-lg" />
+                                    <span className="text-sm font-semibold flex-1">{bedError}</span>
+                                    <button
+                                        onClick={() => { setBedError(null); fetchBedAvailability(bedSearch, bedDistrictFilter); }}
+                                        className="text-red-400 hover:text-white text-xs font-black uppercase tracking-widest border border-red-500/40 hover:border-red-400 px-3 py-1.5 rounded-lg transition-all flex-shrink-0"
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Summary cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                                {[
+                                    { label:'Hospitals', val: bedData.length, icon:'fa-hospital', color:'text-blue-400', bg:'bg-blue-600/10' },
+                                    { label:'Total Wards', val: bedData.reduce((s,h) => s + h.totalWards, 0), icon:'fa-layer-group', color:'text-purple-400', bg:'bg-purple-600/10' },
+                                    { label:'Total Beds', val: bedData.reduce((s,h) => s + h.totalBeds, 0), icon:'fa-bed', color:'text-slate-300', bg:'bg-slate-600/10' },
+                                    { label:'Available Beds', val: bedData.reduce((s,h) => s + h.availableBeds, 0), icon:'fa-bed-pulse', color:'text-emerald-400', bg:'bg-emerald-600/10' },
+                                ].map(c => (
+                                    <div key={c.label} className="glass-card p-4 rounded-2xl flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center`}>
+                                            <i className={`fa-solid ${c.icon} ${c.color} text-base`} />
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{c.label}</p>
+                                            <p className={`text-xl font-extrabold ${c.color}`}>{c.val}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Table */}
+                            <div className="glass-card rounded-2xl overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="premium-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Code</th>
+                                                <th>Hospital Name</th>
+                                                <th>Type</th>
+                                                <th>District</th>
+                                                <th>Wards</th>
+                                                <th>Available Beds</th>
+                                                <th>Occupancy</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {bedLoading ? (
+                                                <tr><td colSpan="8" className="py-10 text-center text-slate-500 italic">
+                                                    <i className="fa-solid fa-spinner animate-spin mr-2" />Loading...
+                                                </td></tr>
+                                            ) : bedData.length === 0 ? (
+                                                <tr><td colSpan="8" className="py-10 text-center text-slate-500 italic">No hospitals found</td></tr>
+                                            ) : bedData.map(h => {
+                                                const pct = h.occupancyPct;
+                                                const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500';
+                                                return (
+                                                    <tr key={h.id} className="hover:bg-white/[0.02] transition-colors">
+                                                        <td className="text-slate-400 font-mono text-xs">{h.hospital_code}</td>
+                                                        <td className="text-white font-bold">{h.name}</td>
+                                                        <td>
+                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 bg-blue-500/10">
+                                                                {h.type || '—'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="text-slate-400 text-sm">{h.district}</td>
+                                                        <td className="text-slate-300 text-sm font-bold">{h.totalWards}</td>
+                                                        <td>
+                                                            <span className={`text-[10px] font-black uppercase px-2 py-1 rounded border ${
+                                                                h.availableBeds === 0 ? 'badge-red' :
+                                                                h.availableBeds <= 5 ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' :
+                                                                'badge-green'
+                                                            }`}>{h.availableBeds} / {h.totalBeds} free</span>
+                                                        </td>
+                                                        <td style={{ minWidth: 120 }}>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                                    <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                                                                </div>
+                                                                <span className="text-xs text-slate-400 font-bold w-8">{pct}%</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <button
+                                                                onClick={() => setSelectedBedHospital(h)}
+                                                                title="View ward-wise details"
+                                                                className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white transition-all"
+                                                            >
+                                                                <i className="fa-solid fa-table-cells-large text-xs" />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Ward Detail Modal */}
+                            {selectedBedHospital && (
+                                <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                                    style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+                                    onClick={() => setSelectedBedHospital(null)}>
+                                    <div className="glass-card rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+                                        onClick={e => e.stopPropagation()}>
+                                        <div className="p-5 border-b border-white/5 flex items-center justify-between">
+                                            <div>
+                                                <h3 className="text-white font-extrabold text-base">{selectedBedHospital.name}</h3>
+                                                <p className="text-slate-400 text-xs mt-0.5">
+                                                    {selectedBedHospital.hospital_code} · {selectedBedHospital.district} · {selectedBedHospital.totalWards} wards
+                                                </p>
+                                            </div>
+                                            <button onClick={() => setSelectedBedHospital(null)}
+                                                className="text-slate-500 hover:text-white text-lg leading-none">×</button>
+                                        </div>
+
+                                        {/* Summary row */}
+                                        <div className="grid grid-cols-3 gap-3 p-4 border-b border-white/5">
+                                            {[
+                                                { label: 'Total Beds', val: selectedBedHospital.totalBeds, color: 'text-slate-300' },
+                                                { label: 'Available', val: selectedBedHospital.availableBeds, color: 'text-emerald-400' },
+                                                { label: 'Occupied', val: selectedBedHospital.occupiedBeds, color: 'text-red-400' },
+                                            ].map(s => (
+                                                <div key={s.label} className="bg-slate-900/60 rounded-xl p-3 text-center">
+                                                    <p className="text-slate-500 text-[10px] uppercase font-black tracking-widest">{s.label}</p>
+                                                    <p className={`text-2xl font-extrabold ${s.color}`}>{s.val}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Ward list */}
+                                        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+                                            {selectedBedHospital.wards.length === 0 ? (
+                                                <p className="text-center text-slate-500 py-8 italic">No ward data available</p>
+                                            ) : selectedBedHospital.wards.map((w, i) => {
+                                                const bs = w.bedStats;
+                                                const wpct = bs.total > 0 ? Math.round(((bs.total - bs.available) / bs.total) * 100) : 0;
+                                                const wColor = wpct >= 90 ? 'bg-red-500' : wpct >= 70 ? 'bg-amber-500' : 'bg-emerald-500';
+                                                return (
+                                                    <div key={i} className="bg-slate-900/60 rounded-xl p-3 border border-white/5">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div>
+                                                                <span className="text-white font-bold text-sm">{w.ward_name}</span>
+                                                                <span className="ml-2 text-[10px] font-black uppercase text-slate-500 bg-slate-800 px-2 py-0.5 rounded">{w.ward_type}</span>
+                                                                {w.floor_number && <span className="ml-1 text-slate-500 text-xs">Floor {w.floor_number}</span>}
+                                                            </div>
+                                                            <span className={`text-[10px] font-black uppercase px-2 py-1 rounded border ${
+                                                                bs.available === 0 ? 'badge-red' :
+                                                                bs.available <= 2 ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' :
+                                                                'badge-green'
+                                                            }`}>{bs.available} / {bs.total} free</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                                                                <div className={`h-full ${wColor} rounded-full`} style={{ width: `${wpct}%` }} />
+                                                            </div>
+                                                            <span className="text-xs text-slate-400 w-10 text-right">{wpct}% full</span>
+                                                        </div>
+                                                        <div className="flex gap-3 mt-2 text-xs text-slate-500">
+                                                            <span>🟢 {bs.available} available</span>
+                                                            <span>🔴 {bs.occupied} occupied</span>
+                                                            {bs.cleaning > 0 && <span>🧹 {bs.cleaning} cleaning</span>}
+                                                            {bs.maintenance > 0 && <span>🔧 {bs.maintenance} maintenance</span>}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── GH & PHC CENTRES ── */}
+                    {currentPage === 'GH' && (
+                        <GHPHCPage />
+                    )}
+
+                    {currentPage === 'DISTRICT_OFFICERS' && (
+                        <DistrictOfficerManager />
+                    )}
+
+                    {/* ── PLACEHOLDER (analytics strip removed) ── */}
+                    {false && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                                    {[
+                                        { label: 'Total Hospitals', val: hospitalAnalytics.totalHospitals,    icon: 'fa-hospital',    color: 'text-blue-400',    bg: 'bg-blue-500/10 border-blue-500/20' },
+                                        { label: 'Active',          val: hospitalAnalytics.activeHospitals,  icon: 'fa-circle-check', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+                                        { label: 'Inactive',        val: hospitalAnalytics.inactiveHospitals,icon: 'fa-circle-xmark', color: 'text-red-400',     bg: 'bg-red-500/10 border-red-500/20' },
+                                        { label: 'Active Admins',   val: hospitalAnalytics.activeAdmins,     icon: 'fa-user-tie',    color: 'text-purple-400',  bg: 'bg-purple-500/10 border-purple-500/20' },
+                                    ].map(({ label, val, icon, color, bg }) => (
+                                        <div key={label} className={`flex items-center gap-3 p-3 rounded-xl border ${bg}`}>
+                                            <i className={`fa-solid ${icon} ${color} text-lg`}></i>
+                                            <div>
+                                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{label}</p>
+                                                <p className={`text-xl font-black ${color}`}>{val ?? '—'}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* ── CREATE FORM ── */}
+                            {ghTab === 'CREATE' && (
+                                <div className="glass-card p-6 rounded-2xl mb-6">
+                                    <h3 className="text-lg font-extrabold text-white mb-5 flex items-center gap-2">
+                                        <i className="fa-solid fa-hospital-user text-blue-400"></i> Register New Hospital
+                                    </h3>
+                                    <form onSubmit={handleCreateHospital}>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                            {[{label:'Hospital Name*',field:'hospitalName',type:'text',placeholder:'e.g. Madras Medical College'},
+                                              {label:'Hospital Code*',field:'hospitalCode',type:'text',placeholder:'e.g. MMC-CHN (immutable)'},
+                                              {label:'Contact Email*',field:'contactEmail',type:'email',placeholder:'admin@hospital.gov.in'},
+                                              {label:'Contact Phone*',field:'contactPhone',type:'tel',placeholder:'10-digit number'},
+                                              {label:'Address',field:'address',type:'text',placeholder:'Full address'},
+                                              {label:'District',field:'district',type:'text',placeholder:'e.g. Chennai'},
+                                            ].map(({label,field,type,placeholder}) => (
+                                                <div key={field}>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1 block mb-1.5">{label}</label>
+                                                    <div className="premium-input-wrapper bg-slate-900 border-white/5">
+                                                        <input type={type} placeholder={placeholder}
+                                                            value={createForm[field]}
+                                                            onChange={e => setCreateForm(p => ({...p, [field]: e.target.value}))}
+                                                            className="premium-input" required={label.endsWith('*')} />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1 block mb-1.5">Type*</label>
+                                                <select value={createForm.type} onChange={e => setCreateForm(p => ({...p, type: e.target.value}))}
+                                                    className="w-full bg-slate-900 border border-white/5 text-white rounded-xl px-4 py-3 text-sm outline-none">
+                                                    {['GH','PHC','PRIVATE','CLINIC'].map(t => <option key={t} value={t}>{t}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1 block mb-1.5">Status</label>
+                                                <select value={createForm.status} onChange={e => setCreateForm(p => ({...p, status: e.target.value}))}
+                                                    className="w-full bg-slate-900 border border-white/5 text-white rounded-xl px-4 py-3 text-sm outline-none">
+                                                    <option value="ACTIVE">Active</option>
+                                                    <option value="INACTIVE">Inactive</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3 pt-2">
+                                            <button type="submit" disabled={createLoading}
+                                                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all disabled:opacity-50">
+                                                {createLoading ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-floppy-disk"></i>}
+                                                {createLoading ? 'Creating…' : 'Create Hospital & Send Credentials'}
+                                            </button>
+                                            <button type="button" onClick={() => setGhTab('LIST')}
+                                                className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-all">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+
+                            {/* ── HOSPITAL LIST ── */}
+                            {ghTab === 'LIST' && (
+                                <>
+                                    {/* Filters */}
+                                    <div className="flex flex-wrap gap-3 mb-5">
+                                        <div className="flex-1 min-w-[200px] premium-input-wrapper bg-slate-900 border-white/5">
+                                            <i className="fa-solid fa-magnifying-glass text-slate-600"></i>
+                                            <input type="text" placeholder="Search by name, code, district…"
+                                                value={ghSearch} onChange={e => { setGhSearch(e.target.value); setGhPage(1); }}
+                                                className="premium-input" />
+                                        </div>
+                                        {[{val:ghType,set:(v)=>{setGhType(v);setGhPage(1);},opts:[['all','All Types'],['GH','GH'],['PHC','PHC'],['PRIVATE','Private'],['CLINIC','Clinic']]},
+                                          {val:ghStatus,set:(v)=>{setGhStatus(v);setGhPage(1);},opts:[['all','All Status'],['active','Active'],['inactive','Inactive']]},
+                                        ].map(({val,set,opts},i) => (
+                                            <select key={i} value={val} onChange={e => set(e.target.value)}
+                                                className="bg-slate-900 border border-white/5 text-slate-300 rounded-xl px-3 py-2.5 text-xs outline-none">
+                                                {opts.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                                            </select>
+                                        ))}
+                                        <button onClick={() => fetchHospitals()}
+                                            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-white/5 py-2.5 px-4 rounded-xl text-xs font-bold text-blue-400 transition-all">
+                                            <i className={`fa-solid fa-rotate-right ${hospitalsLoading ? 'animate-spin' : ''}`}></i>
+                                        </button>
+                                    </div>
+
+                                    {/* Table */}
+                                    {hospitalsLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-24 gap-4">
+                                            <i className="fa-solid fa-circle-notch animate-spin text-4xl text-blue-500"></i>
+                                            <p className="text-slate-500 font-bold text-sm">Loading hospitals…</p>
+                                        </div>
+                                    ) : hospitals.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-24 gap-4">
+                                            <div className="w-16 h-16 rounded-2xl bg-slate-900 flex items-center justify-center text-slate-700 text-2xl"><i className="fa-solid fa-hospital"></i></div>
+                                            <p className="text-slate-500 font-bold">No hospitals found</p>
+                                            <button onClick={() => setGhTab('CREATE')} className="text-blue-400 text-sm font-bold hover:underline">Create first hospital</button>
+                                        </div>
+                                    ) : (
+                                        <div className="glass-card rounded-2xl overflow-hidden">
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-left text-sm">
+                                                    <thead className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-900/60">
+                                                        <tr>
+                                                            <th className="px-4 py-3">Hospital</th>
+                                                            <th className="px-4 py-3">Code</th>
+                                                            <th className="px-4 py-3">Type</th>
+                                                            <th className="px-4 py-3">District</th>
+                                                            <th className="px-4 py-3">Contact</th>
+                                                            <th className="px-4 py-3">Staff</th>
+                                                            <th className="px-4 py-3">Status</th>
+                                                            <th className="px-4 py-3">Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-white/5">
+                                                        {hospitals.map(h => (
+                                                            <tr key={h.id} className="hover:bg-white/[0.015] transition-all">
+                                                                <td className="px-4 py-3">
+                                                                    <p className="text-white font-bold text-sm">{h.hospital_name}</p>
+                                                                    <p className="text-[10px] text-slate-500">{h.contact_email}</p>
+                                                                </td>
+                                                                <td className="px-4 py-3"><span className="font-mono text-blue-400 text-xs font-black">{h.hospital_code}</span></td>
+                                                                <td className="px-4 py-3"><span className="text-[10px] font-black px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">{h.type}</span></td>
+                                                                <td className="px-4 py-3 text-slate-300 text-xs">{h.district || '—'}</td>
+                                                                <td className="px-4 py-3">
+                                                                    <p className="text-xs text-slate-400">{h.contact_phone || '—'}</p>
+                                                                </td>
+                                                                <td className="px-4 py-3"><span className="text-white font-black">{h.staff_count ?? 0}</span></td>
+                                                                <td className="px-4 py-3">
+                                                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                                                                        h.is_active ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'
+                                                                    }`}>{h.is_active ? 'Active' : 'Inactive'}</span>
+                                                                </td>
+                                                                <td className="px-4 py-3">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <button onClick={() => setViewHospital(h)} title="View"
+                                                                            className="text-slate-500 hover:text-blue-400 transition-colors">
+                                                                            <i className="fa-solid fa-eye text-sm"></i>
+                                                                        </button>
+                                                                        <button onClick={() => setEditHospital({...h})} title="Edit"
+                                                                            className="text-slate-500 hover:text-yellow-400 transition-colors">
+                                                                            <i className="fa-solid fa-pen text-sm"></i>
+                                                                        </button>
+                                                                        <button onClick={() => handleToggleStatus(h.id)} title="Toggle Status"
+                                                                            className="text-slate-500 hover:text-emerald-400 transition-colors">
+                                                                            <i className="fa-solid fa-power-off text-sm"></i>
+                                                                        </button>
+                                                                        <button onClick={() => handleDeleteHospital(h.id)} title="Delete"
+                                                                            className="text-slate-500 hover:text-red-400 transition-colors">
+                                                                            <i className="fa-solid fa-trash text-sm"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            {/* Pagination */}
+                                            {ghPagination && ghPagination.pages > 1 && (
+                                                <div className="p-4 border-t border-white/5 flex items-center justify-between">
+                                                    <p className="text-[11px] text-slate-500">Showing {hospitals.length} of {ghPagination.total}</p>
+                                                    <div className="flex gap-2">
+                                                        <button disabled={ghPage <= 1} onClick={() => setGhPage(p => p - 1)}
+                                                            className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 bg-slate-800 disabled:opacity-30">← Prev</button>
+                                                        <span className="px-3 py-1.5 text-xs text-slate-400">{ghPage} / {ghPagination.pages}</span>
+                                                        <button disabled={ghPage >= ghPagination.pages} onClick={() => setGhPage(p => p + 1)}
+                                                            className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 bg-slate-800 disabled:opacity-30">Next →</button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* EDIT MODAL */}
+                            {editHospital && (
+                                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                                    <div className="bg-[#111827] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                                        <div className="p-6">
+                                            <div className="flex items-center justify-between mb-5">
+                                                <h3 className="text-lg font-extrabold text-white">Edit Hospital</h3>
+                                                <button onClick={() => setEditHospital(null)} className="text-slate-500 hover:text-white">
+                                                    <i className="fa-solid fa-xmark text-lg"></i>
+                                                </button>
+                                            </div>
+                                            {/* Code is immutable */}
+                                            <div className="mb-4 p-3 bg-slate-900/60 rounded-xl border border-white/5">
+                                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Hospital Code (Immutable)</p>
+                                                <p className="font-mono text-blue-400 font-black mt-1">{editHospital.hospital_code}</p>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                                                {[{label:'Hospital Name',field:'hospital_name'},
+                                                  {label:'Contact Email',field:'contact_email',type:'email'},
+                                                  {label:'Contact Phone',field:'contact_phone'},
+                                                  {label:'Address',field:'address'},
+                                                  {label:'District',field:'district'},
+                                                ].map(({label,field,type='text'}) => (
+                                                    <div key={field}>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1 block mb-1.5">{label}</label>
+                                                        <input type={type} value={editHospital[field] || ''}
+                                                            onChange={e => setEditHospital(p => ({...p, [field]: e.target.value}))}
+                                                            className="w-full bg-slate-900 border border-white/5 text-white rounded-xl px-4 py-3 text-sm outline-none" />
+                                                    </div>
+                                                ))}
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1 block mb-1.5">Type</label>
+                                                    <select value={editHospital.type || 'GH'} onChange={e => setEditHospital(p => ({...p, type: e.target.value}))}
+                                                        className="w-full bg-slate-900 border border-white/5 text-white rounded-xl px-4 py-3 text-sm outline-none">
+                                                        {['GH','PHC','PRIVATE','CLINIC'].map(t => <option key={t} value={t}>{t}</option>)}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-3">
+                                                <button disabled={editLoading} onClick={() => handleUpdateHospital(editHospital.id, {
+                                                    hospitalName: editHospital.hospital_name,
+                                                    type: editHospital.type,
+                                                    address: editHospital.address,
+                                                    district: editHospital.district,
+                                                    contactEmail: editHospital.contact_email,
+                                                    contactPhone: editHospital.contact_phone
+                                                })} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-black disabled:opacity-50">
+                                                    {editLoading ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-floppy-disk"></i>}
+                                                    Save Changes
+                                                </button>
+                                                <button onClick={() => setEditHospital(null)}
+                                                    className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-400 bg-slate-800">
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* VIEW DETAIL MODAL */}
+                            {viewHospital && (
+                                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                                    <div className="bg-[#111827] border border-white/10 rounded-2xl w-full max-w-lg">
+                                        <div className="p-6">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="text-lg font-extrabold text-white">{viewHospital.hospital_name}</h3>
+                                                <button onClick={() => setViewHospital(null)} className="text-slate-500 hover:text-white">
+                                                    <i className="fa-solid fa-xmark text-lg"></i>
+                                                </button>
+                                            </div>
+                                            <div className="space-y-3">
+                                                {[
+                                                    ['Code',     viewHospital.hospital_code,  'font-mono text-blue-400'],
+                                                    ['Type',     viewHospital.type,            'text-purple-400'],
+                                                    ['District', viewHospital.district,        'text-white'],
+                                                    ['Address',  viewHospital.address,         'text-slate-300'],
+                                                    ['Email',    viewHospital.contact_email,   'text-white'],
+                                                    ['Phone',    viewHospital.contact_phone,   'text-white'],
+                                                    ['Status',   viewHospital.is_active ? 'Active' : 'Inactive', viewHospital.is_active ? 'text-emerald-400' : 'text-red-400'],
+                                                    ['Staff',    viewHospital.staff_count ?? 0, 'text-white'],
+                                                    ['Created',  viewHospital.created_at ? new Date(viewHospital.created_at).toLocaleDateString('en-IN') : '—', 'text-slate-400'],
+                                                ].map(([label, val, cls]) => (
+                                                    <div key={label} className="flex items-center justify-between p-3 bg-slate-900/60 rounded-xl border border-white/5">
+                                                        <span className="text-[11px] text-slate-500 font-black uppercase tracking-widest">{label}</span>
+                                                        <span className={`text-sm font-bold ${cls}`}>{val || '—'}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                     {/* ── SETTINGS ── */}
                     {currentPage === 'SETTINGS' && (

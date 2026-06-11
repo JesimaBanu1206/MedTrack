@@ -33,7 +33,7 @@ export async function getDashboardStats(req, res, next) {
         // 1. Hospital stats via Supabase
         let hospitalQuery = supabase
             .from('hospitals')
-            .select('total_beds, available_beds, icu_beds')
+            .select('id, total_beds, available_beds, icu_beds')
             .eq('is_active', true);
         if (filterDistrict) hospitalQuery = hospitalQuery.eq('district', filterDistrict);
         const { data: hospitals, error: hospErr } = await hospitalQuery;
@@ -45,12 +45,32 @@ export async function getDashboardStats(req, res, next) {
             available_beds: (hospitals || []).reduce((s, h) => s + (h.available_beds || 0), 0),
             icu_beds: (hospitals || []).reduce((s, h) => s + (h.icu_beds || 0), 0),
         };
+        const hospitalIds = (hospitals || []).map(h => h.id).filter(Boolean);
 
         // 2. Patient count
         const { count: totalPatients, error: patErr } = await supabase
             .from('patients')
             .select('id', { count: 'exact', head: true });
         if (patErr) throw new AppError('Failed to fetch patient count: ' + patErr.message, 500);
+
+        // 2b. Staff counts (doctor, nurse, total staff)
+        let staffQuery = supabase
+            .from('staff_profiles')
+            .select('staff_role, hospital_id')
+            .eq('is_deleted', false);
+        if (filterDistrict) {
+            if (hospitalIds.length === 0) {
+                staffQuery = staffQuery.in('hospital_id', ['00000000-0000-0000-0000-000000000000']);
+            } else {
+                staffQuery = staffQuery.in('hospital_id', hospitalIds);
+            }
+        }
+        const { data: staffRows, error: staffErr } = await staffQuery;
+        if (staffErr) throw new AppError('Failed to fetch staff stats: ' + staffErr.message, 500);
+        const staffList = staffRows || [];
+        const totalDoctors = staffList.filter(s => s.staff_role === 'DOCTOR').length;
+        const totalNurses = staffList.filter(s => s.staff_role === 'NURSE').length;
+        const totalStaff = staffList.length;
 
         // 3. Appointment trend — last 7 days (group by date in JS)
         const sevenDaysAgo = new Date();
@@ -109,6 +129,7 @@ export async function getDashboardStats(req, res, next) {
             data: {
                 hospitals: hospitalStats,
                 patients: { total: totalPatients || 0 },
+                staff: { total: totalStaff, doctors: totalDoctors, nurses: totalNurses },
                 trends,
                 districts
             }
@@ -129,7 +150,7 @@ export async function getResourceMonitor(req, res, next) {
     try {
         let query = supabase
             .from('hospitals')
-            .select('name, district, icu_beds, available_beds, total_beds, updated_at')
+            .select('*')
             .eq('is_active', true)
             .order('updated_at', { ascending: false })
             .limit(10);
@@ -137,11 +158,30 @@ export async function getResourceMonitor(req, res, next) {
         if (filterDistrict) query = query.eq('district', filterDistrict);
 
         const { data, error } = await query;
-        if (error) throw new AppError('Failed to fetch resources: ' + error.message, 500);
 
-        res.status(200).json({ success: true, data: data || [] });
+        // Gracefully return empty list on any DB error (e.g. missing column during migration)
+        if (error) {
+            console.warn('[getResourceMonitor] DB warning:', error.message);
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        // Normalize shape so frontend keeps working regardless of schema version
+        const normalized = (data || []).map(h => ({
+            name: h.hospital_name || h.name || 'Unknown',
+            hospital_name: h.hospital_name || h.name || 'Unknown',
+            district: h.district,
+            is_active: h.is_active,
+            icu_beds: h.icu_beds || 0,
+            available_beds: h.available_beds || 0,
+            total_beds: h.total_beds || 0,
+            updated_at: h.updated_at
+        }));
+
+        res.status(200).json({ success: true, data: normalized });
     } catch (error) {
-        next(error);
+        // Never let this endpoint kill the dashboard
+        console.error('[getResourceMonitor] Unexpected error:', error.message);
+        res.status(200).json({ success: true, data: [] });
     }
 }
 
@@ -507,5 +547,154 @@ export async function getAmbulanceUsageOverview(req, res, next) {
     } catch (error) {
         console.error('getAmbulanceUsageOverview error:', error);
         next(error);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET BED AVAILABILITY ACROSS ALL HOSPITALS
+// GET /api/super-admin/bed-availability?search=&district=
+// ─────────────────────────────────────────────────────────────────────────────
+export async function getSuperAdminBedAvailability(req, res, next) {
+    const { search = '', district = 'all' } = req.query;
+    try {
+        // ── Step 1: Fetch hospitals (multiple fallback strategies) ─────────────
+        let hospitals = [];
+        const hospitalSelects = [
+            'id, name, hospital_name, district, type, hospital_code, is_active',
+            'id, name, hospital_name, district, type, is_active',
+            'id, hospital_name, district, type, is_active',
+            'id, hospital_name, district',
+        ];
+
+        for (const sel of hospitalSelects) {
+            try {
+                let q = supabase.from('hospitals').select(sel);
+                if (district !== 'all') q = q.eq('district', district);
+                if (search.trim()) {
+                    const s = search.trim();
+                    q = q.or(`hospital_name.ilike.%${s}%,district.ilike.%${s}%`);
+                }
+                const { data, error } = await q.order('hospital_name', { ascending: true });
+                if (!error && Array.isArray(data)) {
+                    hospitals = data;
+                    break;
+                }
+            } catch { /* try next fallback */ }
+        }
+
+        // Filter out inactive hospitals in JS (handles case where is_active may not exist)
+        hospitals = hospitals.filter(h => h.is_active !== false);
+
+        if (!hospitals.length) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        const hospitalIds = hospitals.map(h => h.id).filter(Boolean);
+
+        // ── Step 2: Fetch wards (graceful — returns empty array on any error) ──
+        let wards = [];
+        try {
+            // Try with is_active filter first
+            const { data: w1, error: e1 } = await supabase
+                .from('wards')
+                .select('id, hospital_id, ward_name, ward_type, total_beds, floor_number, is_active')
+                .in('hospital_id', hospitalIds)
+                .order('ward_name');
+
+            if (!e1 && Array.isArray(w1)) {
+                // Filter active wards in JS so missing is_active column doesn't break us
+                wards = w1.filter(w => w.is_active !== false);
+            } else if (e1) {
+                // Table might not have is_active column — try without it
+                const { data: w2, error: e2 } = await supabase
+                    .from('wards')
+                    .select('id, hospital_id, ward_name, ward_type, total_beds, floor_number')
+                    .in('hospital_id', hospitalIds)
+                    .order('ward_name');
+                if (!e2 && Array.isArray(w2)) wards = w2;
+                // if wards table doesn't exist at all, wards stays []
+            }
+        } catch (wardFetchErr) {
+            console.warn('[getSuperAdminBedAvailability] wards fetch skipped:', wardFetchErr.message);
+        }
+
+        // ── Step 3: Fetch beds (graceful — returns empty array on any error) ──
+        let beds = [];
+        try {
+            // Try with is_active filter
+            const { data: b1, error: be1 } = await supabase
+                .from('beds')
+                .select('hospital_id, ward_id, status, is_active')
+                .in('hospital_id', hospitalIds);
+
+            if (!be1 && Array.isArray(b1)) {
+                beds = b1.filter(b => b.is_active !== false);
+            } else if (be1) {
+                // Try without is_active column
+                const { data: b2, error: be2 } = await supabase
+                    .from('beds')
+                    .select('hospital_id, ward_id, status')
+                    .in('hospital_id', hospitalIds);
+                if (!be2 && Array.isArray(b2)) beds = b2;
+            }
+        } catch (bedFetchErr) {
+            console.warn('[getSuperAdminBedAvailability] beds fetch skipped:', bedFetchErr.message);
+        }
+
+        // ── Step 4: Build bed stats per ward ──────────────────────────────────
+        const bedStatsByWard = {};
+        beds.forEach(b => {
+            if (!b.ward_id) return;
+            if (!bedStatsByWard[b.ward_id]) {
+                bedStatsByWard[b.ward_id] = { total: 0, available: 0, occupied: 0, cleaning: 0, maintenance: 0 };
+            }
+            bedStatsByWard[b.ward_id].total++;
+            const s = (b.status || '').toUpperCase();
+            if (s === 'AVAILABLE')   bedStatsByWard[b.ward_id].available++;
+            if (s === 'OCCUPIED')    bedStatsByWard[b.ward_id].occupied++;
+            if (s === 'CLEANING')    bedStatsByWard[b.ward_id].cleaning++;
+            if (s === 'MAINTENANCE') bedStatsByWard[b.ward_id].maintenance++;
+        });
+
+        // ── Step 5: Build wards per hospital ─────────────────────────────────
+        const wardsByHospital = {};
+        wards.forEach(w => {
+            if (!wardsByHospital[w.hospital_id]) wardsByHospital[w.hospital_id] = [];
+            const bs = bedStatsByWard[w.id] || { total: 0, available: 0, occupied: 0, cleaning: 0, maintenance: 0 };
+            // If beds table is empty, fall back to ward.total_beds as total
+            const effectiveBeds = bs.total > 0 ? bs : {
+                total: w.total_beds || 0,
+                available: w.total_beds || 0,
+                occupied: 0, cleaning: 0, maintenance: 0
+            };
+            wardsByHospital[w.hospital_id].push({ ...w, bedStats: effectiveBeds });
+        });
+
+        // ── Step 6: Compose final result ──────────────────────────────────────
+        const result = hospitals.map(h => {
+            const hWards = wardsByHospital[h.id] || [];
+            const totalBeds     = hWards.reduce((s, w) => s + (w.bedStats.total || 0), 0);
+            const availableBeds = hWards.reduce((s, w) => s + (w.bedStats.available || 0), 0);
+            const occupancyPct  = totalBeds > 0 ? Math.round(((totalBeds - availableBeds) / totalBeds) * 100) : 0;
+            return {
+                id: h.id,
+                hospital_code: h.hospital_code || (h.id ? h.id.slice(0, 8).toUpperCase() : '—'),
+                name: h.hospital_name || h.name || 'Unknown',
+                district: h.district || '—',
+                type: h.type || '—',
+                totalWards: hWards.length,
+                totalBeds,
+                availableBeds,
+                occupiedBeds: totalBeds - availableBeds,
+                occupancyPct,
+                wards: hWards
+            };
+        });
+
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        console.error('[getSuperAdminBedAvailability] Unexpected error:', error.message);
+        // Never let this crash — return empty list so the UI keeps working
+        res.status(200).json({ success: true, data: [], _warning: 'Bed data temporarily unavailable' });
     }
 }

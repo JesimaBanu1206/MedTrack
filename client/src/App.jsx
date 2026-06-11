@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
@@ -28,6 +27,17 @@ import SuperAdminPage from './pages/SuperAdminPage';
 import EmergencyDriverRegisterPage from './pages/EmergencyDriverRegisterPage';
 import EmergencyDriverLoginPage from './pages/EmergencyDriverLoginPage';
 import EmergencyPortalPage from './pages/EmergencyPortalPage';
+import HospitalAdminPage from './pages/HospitalAdminPage';
+import AIDocumentPage from './pages/AIDocumentPage';
+import DoctorDashboardPage from './pages/DoctorDashboardPage';
+import NurseDashboardPage from './pages/NurseDashboardPage';
+import ReceptionistLoginPage from './pages/ReceptionistLoginPage';
+import ReceptionistDashboardPage from './pages/ReceptionistDashboardPage';
+
+// New pages
+import PharmacyDashboardPage from './pages/PharmacyDashboardPage';
+import DistrictDashboardPage from './pages/DistrictDashboardPage';
+import AppointmentPage from './pages/AppointmentPage';
 
 function App() {
     return (
@@ -48,6 +58,18 @@ function App() {
                 <Route path="/super-admin" element={<SuperAdminPage />} />
                 <Route path="/emergency/register" element={<EmergencyDriverRegisterPage />} />
                 <Route path="/emergency/login" element={<EmergencyDriverLoginPage />} />
+                <Route path="/hospital-admin" element={<HospitalAdminPage />} />
+                <Route path="/receptionist/login" element={<ReceptionistLoginPage />} />
+                <Route path="/ai-analyzer" element={<AIDocumentPage />} />
+                <Route path="/doctor" element={<DoctorDashboardPage />} />
+                <Route path="/nurse" element={<NurseDashboardPage />} />
+
+                {/* New Public Routes */}
+                <Route path="/appointments" element={<AppointmentPage />} />
+                <Route path="/book-appointment" element={<AppointmentPage />} />
+                <Route path="/pharmacy" element={<PharmacyDashboardPage />} />
+                <Route path="/district" element={<DistrictDashboardPage />} />
+                <Route path="/district-health" element={<DistrictDashboardPage />} />
 
                 {/* Protected Routes */}
                 <Route
@@ -63,6 +85,14 @@ function App() {
                     element={
                         <ProtectedRoute>
                             <ProfilePage />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/receptionist"
+                    element={
+                        <ProtectedRoute allowedRoles={['RECEPTIONIST', 'HOSPITAL_ADMIN']}>
+                            <ReceptionistDashboardPage />
                         </ProtectedRoute>
                     }
                 />
